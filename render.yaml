@@ -9,3 +9,17 @@ services:
     envVars:
       - key: PYTHON_VERSION
         value: 3.12.0
+      - key: SUPABASE_URL
+        sync: false
+      - key: SUPABASE_SERVICE_ROLE_KEY
+        sync: false
+      - key: ANTHROPIC_API_KEY
+        sync: false
+      - key: FRONTEND_URL
+        sync: false
+      - key: CORS_ORIGINS
+        sync: false
+      - key: SUPABASE_TABLE
+        value: document_chunks
+      - key: ANTHROPIC_MODEL
+        value: claude-haiku-4-5-20251001

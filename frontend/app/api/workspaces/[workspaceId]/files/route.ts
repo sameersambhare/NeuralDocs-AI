@@ -1,12 +1,12 @@
 import { NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+import { getBackendUrl } from '@/lib/backend-url';
 
 export async function GET(
   _req: Request,
   { params }: { params: { workspaceId: string } },
 ) {
   try {
+    const BACKEND_URL = getBackendUrl();
     const { workspaceId } = params;
     const response = await fetch(
       `${BACKEND_URL}/api/workspaces/${encodeURIComponent(workspaceId)}/files`,
@@ -36,6 +36,7 @@ export async function DELETE(
   { params }: { params: { workspaceId: string } },
 ) {
   try {
+    const BACKEND_URL = getBackendUrl();
     const { workspaceId } = params;
     const url = new URL(req.url);
     const filename = url.searchParams.get('filename');

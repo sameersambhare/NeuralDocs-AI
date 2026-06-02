@@ -1,9 +1,9 @@
 import { NextResponse } from 'next/server';
-
-const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
+import { getBackendUrl } from '@/lib/backend-url';
 
 export async function POST(req: Request) {
   try {
+    const BACKEND_URL = getBackendUrl();
     const { message, workspaceId, filenames, sessionId } = await req.json();
 
     if (!message) {

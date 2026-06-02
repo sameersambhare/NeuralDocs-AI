@@ -36,6 +36,15 @@ app.include_router(upload_router)
 app.include_router(chat_router)
 
 
+@app.get("/")
+def root() -> dict[str, str]:
+    return {
+        "name": "NeuralDocs AI Backend",
+        "status": "ok",
+        "health": "/health",
+    }
+
+
 @app.get("/health")
 def health_check() -> dict[str, str]:
     return {"status": "ok"}
