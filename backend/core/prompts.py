@@ -8,8 +8,15 @@ Rules:
 """
 
 
-def build_user_prompt(question: str, context: str) -> str:
-    return f"""Question:
+def build_user_prompt(question: str, context: str, chat_history: str = "") -> str:
+    history_section = ""
+    if chat_history:
+        history_section = f"""Conversation history:
+{chat_history}
+
+"""
+
+    return f"""{history_section}Question:
 {question}
 
 Document context:

@@ -1,6 +1,5 @@
-import { Copy } from 'lucide-react';
+import { Copy, FileSearch, Table2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent } from '@/components/ui/card';
 import { useState } from 'react';
 import { PDFSource } from '@/types/graphTypes';
 import {
@@ -9,6 +8,17 @@ import {
   AccordionItem,
   AccordionTrigger,
 } from '@/components/ui/accordion';
+import {
+  HoverCard,
+  HoverCardContent,
+  HoverCardTrigger,
+} from '@/components/ui/hover-card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 
 interface ChatMessageProps {
   message: {
@@ -21,6 +31,7 @@ interface ChatMessageProps {
 export function ChatMessage({ message }: ChatMessageProps) {
   const isUser = message.role === 'user';
   const [copied, setCopied] = useState(false);
+  const [activeSource, setActiveSource] = useState<PDFSource | null>(null);
   const isLoading = message.role === 'assistant' && message.content === '';
 
   const handleCopy = async () => {
@@ -62,6 +73,13 @@ export function ChatMessage({ message }: ChatMessageProps) {
             ) : (
               <FormattedAssistantMessage content={message.content} />
             )}
+            {showSources && message.sources && (
+              <div className="mt-3 flex flex-wrap gap-2">
+                {message.sources.map((source, index) => (
+                  <SourceHoverCard key={index} source={source} index={index} />
+                ))}
+              </div>
+            )}
             {!isUser && (
               <div className="flex gap-2 mt-2">
                 <Button
@@ -74,9 +92,9 @@ export function ChatMessage({ message }: ChatMessageProps) {
                   <Copy
                     className={`h-4 w-4 ${copied ? 'text-green-500' : ''}`}
                   />
-                </Button>
-              </div>
-            )}
+                  </Button>
+                </div>
+              )}
             {showSources && message.sources && (
               <Accordion type="single" collapsible className="w-full mt-2">
                 <AccordionItem value="sources" className="border-b-0">
@@ -84,31 +102,169 @@ export function ChatMessage({ message }: ChatMessageProps) {
                     View Sources ({message.sources.length})
                   </AccordionTrigger>
                   <AccordionContent>
-                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
+                    <div className="grid grid-cols-1 gap-2 sm:grid-cols-2">
                       {message.sources?.map((source, index) => (
-                        <Card
+                        <button
                           key={index}
-                          className="bg-background/50 transition-all duration-200 hover:bg-background hover:shadow-md hover:scale-[1.02] cursor-pointer"
+                          type="button"
+                          onClick={() => setActiveSource(source)}
+                          className="rounded-md border bg-background/50 p-3 text-left transition-colors hover:bg-cyan-50"
                         >
-                          <CardContent className="p-3">
-                            <p className="text-sm font-medium truncate">
-                              {source.filename || 'N/A'}
-                            </p>
-                            <p className="text-sm text-muted-foreground">
-                              Page {source.page || 'N/A'}
-                            </p>
-                          </CardContent>
-                        </Card>
+                          <div className="flex items-start gap-2">
+                            {source.content_type === 'table' ? (
+                              <Table2 className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
+                            ) : (
+                              <FileSearch className="mt-0.5 h-4 w-4 shrink-0 text-cyan-700" />
+                            )}
+                            <div className="min-w-0">
+                              <p className="truncate text-sm font-medium">
+                                {source.filename || 'N/A'}
+                              </p>
+                              <p className="text-sm text-muted-foreground">
+                                Page {source.page || 'N/A'}
+                                {source.table_index
+                                  ? `, Table ${source.table_index}`
+                                  : ''}
+                              </p>
+                              <p className="mt-1 line-clamp-2 text-xs text-slate-600">
+                                {source.snippet || source.content}
+                              </p>
+                            </div>
+                          </div>
+                        </button>
                       ))}
                     </div>
                   </AccordionContent>
                 </AccordionItem>
               </Accordion>
             )}
+            <SourceDialog
+              source={activeSource}
+              onOpenChange={(open) => {
+                if (!open) setActiveSource(null);
+              }}
+            />
           </>
         )}
       </div>
     </div>
+  );
+}
+
+function SourceHoverCard({
+  source,
+  index,
+}: {
+  source: PDFSource;
+  index: number;
+}) {
+  return (
+    <HoverCard openDelay={120} closeDelay={80}>
+      <HoverCardTrigger asChild>
+        <button
+          type="button"
+          className="inline-flex items-center gap-2 rounded-full border border-slate-200 bg-slate-50 px-3 py-1.5 text-xs font-medium text-slate-700 shadow-sm transition-colors hover:border-cyan-200 hover:bg-cyan-50 hover:text-cyan-900"
+        >
+          <span className="rounded-full bg-white px-1.5 py-0.5 text-[10px] font-semibold text-slate-500">
+            {index + 1}
+          </span>
+          <span className="max-w-[14rem] truncate">{source.filename}</span>
+          <span className="text-slate-400">
+            {source.page ? `p.${source.page}` : 'source'}
+          </span>
+        </button>
+      </HoverCardTrigger>
+      <HoverCardContent className="w-80">
+        <div className="space-y-2">
+          <div>
+            <p className="text-sm font-semibold text-slate-950">
+              {source.filename}
+            </p>
+            <p className="text-xs text-muted-foreground">
+              {source.page ? `Page ${source.page}` : 'Page unavailable'}
+              {source.table_index ? `, Table ${source.table_index}` : ''}
+              {source.extraction_method ? `, ${source.extraction_method}` : ''}
+            </p>
+          </div>
+          <div className="rounded-md border bg-slate-50 p-3 text-xs leading-5 text-slate-700">
+            <p className="line-clamp-5">
+              {source.snippet || source.content || 'No preview available.'}
+            </p>
+          </div>
+        </div>
+      </HoverCardContent>
+    </HoverCard>
+  );
+}
+
+function SourceDialog({
+  source,
+  onOpenChange,
+}: {
+  source: PDFSource | null;
+  onOpenChange: (open: boolean) => void;
+}) {
+  return (
+    <Dialog open={Boolean(source)} onOpenChange={onOpenChange}>
+      <DialogContent className="max-h-[82vh] max-w-3xl overflow-hidden">
+        {source && (
+          <>
+            <DialogHeader>
+              <DialogTitle className="flex items-center gap-2 text-base">
+                {source.content_type === 'table' ? (
+                  <Table2 className="h-4 w-4 text-cyan-700" />
+                ) : (
+                  <FileSearch className="h-4 w-4 text-cyan-700" />
+                )}
+                <span className="truncate">{source.filename}</span>
+              </DialogTitle>
+              <p className="text-sm text-muted-foreground">
+                Page {source.page || 'N/A'}
+                {source.table_index ? `, Table ${source.table_index}` : ''}
+                {source.extraction_method
+                  ? `, ${source.extraction_method}`
+                  : ''}
+              </p>
+            </DialogHeader>
+            <div className="max-h-[60vh] overflow-auto rounded-md border bg-slate-50 p-4 text-sm leading-6 text-slate-800">
+              {renderHighlightedContent(source.content, source.snippet)}
+            </div>
+          </>
+        )}
+      </DialogContent>
+    </Dialog>
+  );
+}
+
+function renderHighlightedContent(content: string, snippet: string) {
+  const sourceText = content || '';
+  const highlight = snippet?.replace(/\.\.\.$/, '').trim();
+
+  if (!highlight) {
+    return <pre className="whitespace-pre-wrap font-sans">{sourceText}</pre>;
+  }
+
+  const index = sourceText.toLowerCase().indexOf(highlight.toLowerCase());
+  if (index === -1) {
+    return (
+      <pre className="whitespace-pre-wrap font-sans">
+        <mark className="rounded bg-amber-200 px-1">{highlight}</mark>
+        {'\n\n'}
+        {sourceText}
+      </pre>
+    );
+  }
+
+  const before = sourceText.slice(0, index);
+  const match = sourceText.slice(index, index + highlight.length);
+  const after = sourceText.slice(index + highlight.length);
+
+  return (
+    <pre className="whitespace-pre-wrap font-sans">
+      {before}
+      <mark className="rounded bg-amber-200 px-1">{match}</mark>
+      {after}
+    </pre>
   );
 }
 

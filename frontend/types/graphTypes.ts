@@ -1,8 +1,15 @@
 import { Document } from '@langchain/core/documents';
 
 export interface PDFSource {
+  id?: number | string | null;
   filename: string;
   page?: number | null;
+  workspace_id?: string | null;
+  content: string;
+  snippet: string;
+  content_type?: string | null;
+  extraction_method?: string | null;
+  table_index?: number | null;
 }
 
 /**

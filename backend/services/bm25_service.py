@@ -6,8 +6,13 @@ from rank_bm25 import BM25Okapi
 from services.vector_store_service import get_all_chunks
 
 
-def bm25_search(question: str, k: int) -> list[dict[str, Any]]:
-    rows = get_all_chunks()
+def bm25_search(
+    question: str,
+    k: int,
+    workspace_id: str | None = None,
+    filenames: list[str] | None = None,
+) -> list[dict[str, Any]]:
+    rows = get_all_chunks(workspace_id, filenames)
     if not rows:
         return []
 

@@ -20,12 +20,20 @@ class Settings(BaseSettings):
 
     chunk_size: int = 1000
     chunk_overlap: int = 200
-    vector_k: int = 10
-    bm25_k: int = 10
+    vector_k: int = 20
+    bm25_k: int = 20
+    hybrid_k: int = 20
     final_k: int = 5
 
     max_files: int = 5
     max_file_size_mb: int = 10
+    ocr_enabled: bool = True
+    ocr_min_text_chars: int = 20
+    ocr_dpi: int = 200
+    easyocr_languages: str = "en"
+    easyocr_gpu: bool = False
+    table_extraction_enabled: bool = True
+    conversation_memory_turns: int = 6
 
     model_config = SettingsConfigDict(
         env_file=".env",
