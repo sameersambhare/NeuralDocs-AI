@@ -17,11 +17,7 @@ import {
 import { ExamplePrompts } from '@/components/example-prompts';
 import { ChatMessage } from '@/components/chat-message';
 import { FilePreview } from '@/components/file-preview';
-import { createClient } from '@/lib/langgraph-client';
-import {
-  PDFDocument,
-  RetrieveDocumentsNodeUpdates,
-} from '@/types/graphTypes';
+import { PDFSource } from '@/types/graphTypes';
 
 export default function Home() {
   const { toast } = useToast(); // Add this hook
@@ -29,43 +25,15 @@ export default function Home() {
     Array<{
       role: 'user' | 'assistant';
       content: string;
-      sources?: PDFDocument[];
+      sources?: PDFSource[];
     }>
   >([]);
   const [input, setInput] = useState('');
   const [files, setFiles] = useState<File[]>([]);
   const [isUploading, setIsUploading] = useState(false);
   const [isLoading, setIsLoading] = useState(false);
-  const [threadId, setThreadId] = useState<string | null>(null);
   const fileInputRef = useRef<HTMLInputElement>(null);
-  const abortControllerRef = useRef<AbortController | null>(null); // Track the AbortController
   const messagesEndRef = useRef<HTMLDivElement>(null); // Add this ref
-  const lastRetrievedDocsRef = useRef<PDFDocument[]>([]); // useRef to store the last retrieved documents
-
-  useEffect(() => {
-    // Create a thread when the component mounts
-    const initThread = async () => {
-      // Skip if we already have a thread
-      if (threadId) return;
-
-      try {
-        const client = createClient();
-        const thread = await client.createThread();
-
-        setThreadId(thread.thread_id);
-      } catch (error) {
-        console.error('Error creating thread:', error);
-        toast({
-          title: 'Error',
-          description:
-            'Error creating thread. Please make sure you have set the LANGGRAPH_API_URL environment variable correctly. ' +
-            error,
-          variant: 'destructive',
-        });
-      }
-    };
-    initThread();
-  }, []);
 
   useEffect(() => {
     messagesEndRef.current?.scrollIntoView({ behavior: 'smooth' });
@@ -73,11 +41,7 @@ export default function Home() {
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
-    if (!input.trim() || !threadId || isLoading) return;
-
-    if (abortControllerRef.current) {
-      abortControllerRef.current.abort();
-    }
+    if (!input.trim() || isLoading) return;
 
     const userMessage = input.trim();
     setMessages((prev) => [
@@ -88,11 +52,6 @@ export default function Home() {
     setInput('');
     setIsLoading(true);
 
-    const abortController = new AbortController();
-    abortControllerRef.current = abortController;
-
-    lastRetrievedDocsRef.current = []; // Clear the last retrieved documents
-
     try {
       const response = await fetch('/api/chat', {
         method: 'POST',
@@ -101,91 +60,24 @@ export default function Home() {
         },
         body: JSON.stringify({
           message: userMessage,
-          threadId,
         }),
-        signal: abortController.signal,
       });
 
       if (!response.ok) {
-        throw new Error(`HTTP error! status: ${response.status}`);
+        const data = await response.json();
+        throw new Error(data.error || `HTTP error! status: ${response.status}`);
       }
 
-      const reader = response.body?.getReader();
-      if (!reader) throw new Error('No reader available');
-
-      const decoder = new TextDecoder();
-
-      while (true) {
-        const { done, value } = await reader.read();
-        if (done) break;
-
-        const chunkStr = decoder.decode(value);
-        const lines = chunkStr.split('\n').filter(Boolean);
-
-        for (const line of lines) {
-          if (!line.startsWith('data: ')) continue;
-
-          const sseString = line.slice('data: '.length);
-          let sseEvent: any;
-          try {
-            sseEvent = JSON.parse(sseString);
-          } catch (err) {
-            console.error('Error parsing SSE line:', err, line);
-            continue;
-          }
-
-          const { event, data } = sseEvent;
-
-          if (event === 'messages/partial') {
-            if (Array.isArray(data)) {
-              const lastObj = data[data.length - 1];
-              if (lastObj?.type === 'ai') {
-                const partialContent = lastObj.content ?? '';
-
-                // Only display if content is a string message
-                if (
-                  typeof partialContent === 'string' &&
-                  !partialContent.startsWith('{')
-                ) {
-                  setMessages((prev) => {
-                    const newArr = [...prev];
-                    if (
-                      newArr.length > 0 &&
-                      newArr[newArr.length - 1].role === 'assistant'
-                    ) {
-                      newArr[newArr.length - 1].content = partialContent;
-                      newArr[newArr.length - 1].sources =
-                        lastRetrievedDocsRef.current;
-                    }
-
-                    return newArr;
-                  });
-                }
-              }
-            }
-          } else if (event === 'updates' && data) {
-            if (
-              data &&
-              typeof data === 'object' &&
-              'retrieveDocuments' in data &&
-              data.retrieveDocuments &&
-              Array.isArray(data.retrieveDocuments.documents)
-            ) {
-              const retrievedDocs = (data as RetrieveDocumentsNodeUpdates)
-                .retrieveDocuments.documents as PDFDocument[];
-
-              // // Handle documents here
-              lastRetrievedDocsRef.current = retrievedDocs;
-              console.log('Retrieved documents:', retrievedDocs);
-            } else {
-              // Clear the last retrieved documents if it's a direct answer
-              lastRetrievedDocsRef.current = [];
-            }
-          } else {
-            console.log('Unknown SSE event:', event, data);
-          }
-        }
-      }
+      const data = await response.json();
+      setMessages((prev) => {
+        const newArr = [...prev];
+        newArr[newArr.length - 1] = {
+          role: 'assistant',
+          content: data.answer,
+          sources: data.sources || [],
+        };
+        return newArr;
+      });
     } catch (error) {
       console.error('Error sending message:', error);
       toast({
@@ -203,7 +95,6 @@ export default function Home() {
       });
     } finally {
       setIsLoading(false);
-      abortControllerRef.current = null;
     }
   };
 
@@ -394,15 +285,13 @@ export default function Home() {
                     : 'Ask a question about your documents...'
                 }
                 className="h-12 border-0 bg-transparent focus-visible:ring-0 focus-visible:ring-offset-0"
-                disabled={isUploading || isLoading || !threadId}
+                disabled={isUploading || isLoading}
               />
               <Button
                 type="submit"
                 size="icon"
                 className="h-12 rounded-none"
-                disabled={
-                  !input.trim() || isUploading || isLoading || !threadId
-                }
+                disabled={!input.trim() || isUploading || isLoading}
               >
                 {isLoading ? (
                   <Loader2 className="h-4 w-4 animate-spin" />

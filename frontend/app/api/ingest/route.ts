@@ -1,110 +1,45 @@
-// app/api/ingest/route.ts
-import { indexConfig } from '@/constants/graphConfigs';
-import { createServerClient } from '@/lib/langgraph-server';
-import { processPDF } from '@/lib/pdf';
-import { Document } from '@langchain/core/documents';
 import { NextRequest, NextResponse } from 'next/server';
 
-// Configuration constants
-const MAX_FILE_SIZE = 10 * 1024 * 1024; // 10MB
-const ALLOWED_FILE_TYPES = ['application/pdf'];
+const BACKEND_URL = process.env.BACKEND_URL || 'http://127.0.0.1:8000';
 
 export async function POST(request: NextRequest) {
   try {
-    if (!process.env.LANGGRAPH_INGESTION_ASSISTANT_ID) {
-      return NextResponse.json(
-        {
-          error:
-            'LANGGRAPH_INGESTION_ASSISTANT_ID is not set in your environment variables',
-        },
-        { status: 500 },
-      );
-    }
-
     const formData = await request.formData();
-    const files: File[] = [];
 
-    for (const [key, value] of formData.entries()) {
-      if (key === 'files' && value instanceof File) {
-        files.push(value);
-      }
-    }
-
-    if (!files || files.length === 0) {
-      return NextResponse.json({ error: 'No files provided' }, { status: 400 });
-    }
-
-    // Validate file count
-    if (files.length > 5) {
-      return NextResponse.json(
-        { error: 'Too many files. Maximum 5 files allowed.' },
-        { status: 400 },
-      );
-    }
-
-    // Validate file types and sizes
-    const invalidFiles = files.filter((file) => {
-      return (
-        !ALLOWED_FILE_TYPES.includes(file.type) || file.size > MAX_FILE_SIZE
-      );
+    const response = await fetch(`${BACKEND_URL}/api/upload`, {
+      method: 'POST',
+      body: formData,
     });
 
-    if (invalidFiles.length > 0) {
+    const data = await readJsonResponse(response);
+
+    if (!response.ok) {
       return NextResponse.json(
-        {
-          error:
-            'Only PDF files are allowed and file size must be less than 10MB',
-        },
-        { status: 400 },
+        { error: data.detail || data.error || 'Failed to upload files' },
+        { status: response.status },
       );
     }
 
-    // Process all PDFs into Documents
-    const allDocs: Document[] = [];
-    for (const file of files) {
-      try {
-        const docs = await processPDF(file);
-        allDocs.push(...docs);
-      } catch (error: any) {
-        console.error(`Error processing file ${file.name}:`, error);
-        // Continue processing other files; errors are logged
-      }
-    }
-
-    if (!allDocs.length) {
-      return NextResponse.json(
-        { error: 'No valid documents extracted from uploaded files' },
-        { status: 500 },
-      );
-    }
-
-    // Run the ingestion graph
-    const langGraphServerClient = createServerClient();
-    const thread = await langGraphServerClient.createThread();
-    const ingestionRun = await langGraphServerClient.client.runs.wait(
-      thread.thread_id,
-      'ingestion_graph',
-      {
-        input: {
-          docs: allDocs,
-        },
-        config: {
-          configurable: {
-            ...indexConfig,
-          },
-        },
-      },
-    );
-
-    return NextResponse.json({
-      message: 'Documents ingested successfully',
-      threadId: thread.thread_id,
-    });
-  } catch (error: any) {
-    console.error('Error processing files:', error);
+    return NextResponse.json(data);
+  } catch (error) {
+    console.error('Upload proxy error:', error);
     return NextResponse.json(
-      { error: 'Failed to process files', details: error.message },
+      { error: 'Failed to reach backend upload endpoint' },
       { status: 500 },
     );
+  }
+}
+
+async function readJsonResponse(response: Response) {
+  const text = await response.text();
+
+  if (!text) {
+    return {};
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    return { error: text };
   }
 }

@@ -1,5 +1,10 @@
 import { Document } from '@langchain/core/documents';
 
+export interface PDFSource {
+  filename: string;
+  page?: number | null;
+}
+
 /**
  * Represents the state of the retrieval graph / agent.
  */
