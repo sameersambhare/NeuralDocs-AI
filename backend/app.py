@@ -1,3 +1,5 @@
+import os
+
 from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 
@@ -7,9 +9,24 @@ from routes.upload import router as upload_router
 
 app = FastAPI(title="NeuralDocs AI Backend")
 
+default_origins = {
+    "http://localhost:3000",
+    "http://127.0.0.1:3000",
+}
+configured_origins = {
+    origin.strip().rstrip("/")
+    for origin in os.getenv("CORS_ORIGINS", "").split(",")
+    if origin.strip()
+}
+frontend_url = os.getenv("FRONTEND_URL", "").strip().rstrip("/")
+if frontend_url:
+    configured_origins.add(frontend_url)
+
+allow_origins = sorted(default_origins | configured_origins)
+
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],
+    allow_origins=allow_origins,
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
