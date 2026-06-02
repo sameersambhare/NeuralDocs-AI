@@ -270,4 +270,4 @@ If you're rebuilding from scratch, follow this sequence:
 
 ## License
 
-See `LICENSE` for details.
+See [LICENSE](./LICENSE.md) for details.
